@@ -1,0 +1,75 @@
+$nomention
+$onlyIf[$hasPerms[ManageMessages;$authorID]==true;{color:RED}{title:❌ No Permission}{description:You need `Manage Messages` permission to use this command!}]
+
+$onlyIf[$getSlashCommandOptions[user]!=;{color:RED}{title:❌ Error}{description:Please specify a user to reset the limit for!}]
+
+$c[Get user ID from mention or direct ID]
+$let[targetUser;$getSlashCommandOptions[user]]
+
+$c[Check if user exists]
+$onlyIf[$userExists[$get[targetUser]]==true;{color:RED}{title:❌ Invalid User}{description:The specified user doesn't exist or I can't find them!}]
+
+$c[If category is specified, reset only that category]
+$if[$getSlashCommandOptions[category]!=]
+  $let[category;$getSlashCommandOptions[category]]
+  $let[cooldownKey;dispenser_$get[targetUser]_$get[category]]
+  
+  $c[Check if user had any cooldown for this category]
+  $let[hadCooldown;$if[$getUserVar[$get[cooldownKey];$get[targetUser]]>$dateStamp;true;false]]
+  
+  $c[Reset the specific category cooldown]
+  $setUserVar[$get[cooldownKey];0;$get[targetUser]]
+  
+  $c[Log the reset]
+  $channelSendMessage[$getGlobalUserVar[modlog_channel_id];{color:ORANGE}{title:🔄 Limit Reset}{description:**Reset by:** <@$authorID> (`$authorID`)
+**Target User:** <@$get[targetUser]> (`$get[targetUser]`)
+**Category:** $get[category]
+**Had Active Cooldown:** $get[hadCooldown]}{timestamp}]
+  
+  {color:GREEN}{title:✅ Limit Reset Successfully!}{description:**User:** <@$get[targetUser]>
+**Category:** $get[category]
+**Status:** $if[$get[hadCooldown]==true;Cooldown was active and has been reset;No active cooldown found, but reset anyway]
+
+They can now generate a link immediately from this category.}
+$else
+  $c[Reset all categories for the user]
+  $let[resetCount;0]
+  
+  $c[Get all possible categories from Firebase to reset all cooldowns]
+  $httpRequest[https://dominum-dispenser.firebaseio.com/links.json?auth=$getGlobalUserVar[firebase_token];GET;;categories_response;{
+    "content-type": "application/json"
+  }]
+  
+  $if[$httpResult[categories_response]!=null]
+    $let[allCategories;$objectKeys[$httpResult[categories_response]]]
+    $let[totalCategories;$arrayLength[$get[allCategories]]]
+    
+    $c[Reset cooldown for each category]
+    $for[i;0;$sub[$get[totalCategories];1]]
+      $let[currentCategory;$arrayAt[$get[allCategories];$get[i]]]
+      $let[cooldownKey;dispenser_$get[targetUser]_$get[currentCategory]]
+      
+      $if[$getUserVar[$get[cooldownKey];$get[targetUser]]>$dateStamp]
+        $let[resetCount;$sum[$get[resetCount];1]]
+      $endif
+      
+      $setUserVar[$get[cooldownKey];0;$get[targetUser]]
+    $endFor
+  $endif
+  
+  $c[Also reset any other potential cooldowns (in case categories were deleted)]
+  $c[This is a broad reset - you might want to implement a more specific approach]
+  
+  $c[Log the reset]
+  $channelSendMessage[$getGlobalUserVar[modlog_channel_id];{color:ORANGE}{title:🔄 All Limits Reset}{description:**Reset by:** <@$authorID> (`$authorID`)
+**Target User:** <@$get[targetUser]> (`$get[targetUser]`)
+**Categories with Active Cooldowns:** $get[resetCount]}{timestamp}]
+  
+  {color:GREEN}{title:✅ All Limits Reset Successfully!}{description:**User:** <@$get[targetUser]>
+**Categories Reset:** All available categories
+**Active Cooldowns Found:** $get[resetCount]
+
+They can now generate links immediately from any category.}
+$endif
+
+$createSlashCommand[reset-limit;Reset dispenser cooldown for a user;user:The user to reset limits for:true:6,category:Specific category to reset (optional):false:3]

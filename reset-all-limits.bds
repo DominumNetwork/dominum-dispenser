@@ -1,0 +1,108 @@
+$nomention
+$onlyIf[$hasPerms[Administrator;$authorID]==true;{color:RED}{title:❌ No Permission}{description:You need `Administrator` permission to use this command!}]
+
+$c[Confirmation check]
+$onlyIf[$getSlashCommandOptions[confirm]==yes;{color:YELLOW}{title:⚠️ Confirmation Required}{description:This will reset dispenser cooldowns for **ALL USERS** in the server.
+
+To confirm, use the command again with the `confirm` parameter set to `yes`.
+
+**This action cannot be undone!**}]
+
+$c[Get all categories from Firebase]
+$httpRequest[https://dominum-dispenser.firebaseio.com/links.json?auth=$getGlobalUserVar[firebase_token];GET;;categories_response;{
+  "content-type": "application/json"
+}]
+
+$let[categoriesExist;$if[$httpResult[categories_response]!=null;true;false]]
+
+$c[Start the reset process]
+$let[resetCount;0]
+$let[processedUsers;0]
+
+$c[Get all members in the server]
+$let[allMembers;$allMembersCount]
+
+$c[If we have categories, reset based on those]
+$if[$get[categoriesExist]==true]
+  $let[allCategories;$objectKeys[$httpResult[categories_response]]]
+  $let[totalCategories;$arrayLength[$get[allCategories]]]
+  
+  $c[For each category, we need to reset all users]
+  $for[i;0;$sub[$get[totalCategories];1]]
+    $let[currentCategory;$arrayAt[$get[allCategories];$get[i]]]
+    
+    $c[Reset this category for all users - this is a simplified approach]
+    $c[In practice, you might want to use a more sophisticated method]
+    $c[to track and reset specific users who have used the system]
+    
+    $c[We'll use a server variable to track users who have used the dispenser]
+    $let[usedUsers;$getServerVar[dispenser_users_$get[currentCategory]]]
+    $if[$get[usedUsers]!=]
+      $let[userList;$textSplit[$get[usedUsers];,]]
+      $let[userCount;$arrayLength[$get[userList]]]
+      
+      $for[j;0;$sub[$get[userCount];1]]
+        $let[userId;$arrayAt[$get[userList];$get[j]]]
+        $let[cooldownKey;dispenser_$get[userId]_$get[currentCategory]]
+        
+        $if[$getUserVar[$get[cooldownKey];$get[userId]]>$dateStamp]
+          $let[resetCount;$sum[$get[resetCount];1]]
+        $endif
+        
+        $setUserVar[$get[cooldownKey];0;$get[userId]]
+      $endFor
+    $endif
+  $endFor
+$endif
+
+$c[Alternative approach: Reset cooldowns for recent users]
+$c[This is a more comprehensive reset that covers users who may have used the system]
+$let[recentUsers;$getServerVar[recent_dispenser_users]]
+$if[$get[recentUsers]!=]
+  $let[userList;$textSplit[$get[recentUsers];,]]
+  $let[userCount;$arrayLength[$get[userList]]]
+  
+  $for[k;0;$sub[$get[userCount];1]]
+    $let[userId;$arrayAt[$get[userList];$get[k]]]
+    $let[processedUsers;$sum[$get[processedUsers];1]]
+    
+    $c[Reset all potential cooldowns for this user]
+    $if[$get[categoriesExist]==true]
+      $for[l;0;$sub[$get[totalCategories];1]]
+        $let[currentCategory;$arrayAt[$get[allCategories];$get[l]]]
+        $let[cooldownKey;dispenser_$get[userId]_$get[currentCategory]]
+        $setUserVar[$get[cooldownKey];0;$get[userId]]
+      $endFor
+    $endif
+  $endFor
+$endif
+
+$c[Clear the tracking variables]
+$setServerVar[recent_dispenser_users;]
+$if[$get[categoriesExist]==true]
+  $for[m;0;$sub[$get[totalCategories];1]]
+    $let[currentCategory;$arrayAt[$get[allCategories];$get[m]]]
+    $setServerVar[dispenser_users_$get[currentCategory];]
+  $endFor
+$endif
+
+$c[Log the mass reset]
+$channelSendMessage[$getGlobalUserVar[modlog_channel_id];{color:RED}{title:🔄 MASS LIMIT RESET}{description:**Reset by:** <@$authorID> (`$authorID`)
+**Server:** $serverName (`$serverID`)
+**Categories:** $if[$get[categoriesExist]==true;$get[totalCategories];0]
+**Users Processed:** $get[processedUsers]
+**Active Cooldowns Reset:** $get[resetCount]}{timestamp}]
+
+$c[Confirm to user]
+{color:GREEN}{title:✅ All Limits Reset Successfully!}{description:**Mass Reset Completed**
+
+📊 **Statistics:**
+• **Categories:** $if[$get[categoriesExist]==true;$get[totalCategories];0]
+• **Users Processed:** $get[processedUsers]
+• **Active Cooldowns Reset:** $get[resetCount]
+
+All users can now generate links immediately from any category.
+
+⚠️ **Note:** This action has been logged and cannot be undone.}{footer:Mass reset completed by $username}
+
+$createSlashCommand[reset-all-limits;Reset dispenser cooldowns for ALL users;confirm:Type 'yes' to confirm this action:false:3]

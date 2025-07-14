@@ -1,0 +1,39 @@
+$nomention
+$onlyIf[$hasPerms[ManageMessages;$authorID]==true;{color:RED}{title:❌ No Permission}{description:You need `Manage Messages` permission to use this command!}]
+
+$onlyIf[$getSlashCommandOptions[category]!=;{color:RED}{title:❌ Error}{description:Please specify a category for the link!}]
+$onlyIf[$getSlashCommandOptions[link]!=;{color:RED}{title:❌ Error}{description:Please provide a link to add!}]
+
+$c[Validate URL format]
+$onlyIf[$checkContains[$getSlashCommandOptions[link];http]==true;{color:RED}{title:❌ Invalid Link}{description:Please provide a valid URL starting with http:// or https://}]
+
+$c[Generate unique ID for the link]
+$let[linkId;$randomString[10]]
+
+$c[Add link to Firebase]
+$httpRequest[https://dominum-dispenser.firebaseio.com/links/$getSlashCommandOptions[category]/$get[linkId].json?auth=$getGlobalUserVar[firebase_token];PUT;$getSlashCommandOptions[link];add_response;{
+  "content-type": "application/json"
+}]
+
+$c[Check if addition was successful]
+$onlyIf[$httpStatus[add_response]==200;{color:RED}{title:❌ Database Error}{description:Failed to add link to the database. Please try again later.}]
+
+$c[Get updated count]
+$httpRequest[https://dominum-dispenser.firebaseio.com/links/$getSlashCommandOptions[category].json?auth=$getGlobalUserVar[firebase_token];GET;;count_response;{
+  "content-type": "application/json"
+}]
+
+$let[totalLinks;$arrayLength[$objectKeys[$httpResult[count_response]]]]
+
+$c[Log addition]
+$channelSendMessage[$getGlobalUserVar[modlog_channel_id];{color:GREEN}{title:➕ Link Added}{description:**Added by:** <@$authorID> (`$authorID`)
+**Category:** $getSlashCommandOptions[category]
+**Link:** $getSlashCommandOptions[link]
+**Total Links in Category:** $get[totalLinks]}{timestamp}]
+
+$c[Confirm to user]
+{color:GREEN}{title:✅ Link Added Successfully!}{description:**Category:** $getSlashCommandOptions[category]
+**Link:** $getSlashCommandOptions[link]
+**Total Links in Category:** $get[totalLinks]}{footer:Link ID: $get[linkId]}
+
+$createSlashCommand[add-link;Add a link to the database;category:The category to add the link to:true:3,link:The link to add:true:3]
