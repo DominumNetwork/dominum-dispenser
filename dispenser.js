@@ -34,7 +34,7 @@ $let[selectedLink;$objectProperty[$get[linksData];$get[selectedKey]]]
 $c[Send link via DM]
 $sendDM[$authorID;{color:GREEN}{title:🎉 Link Generated!}{description:**Category:** $getSlashCommandOptions[category]
 **Link:** $get[selectedLink]
-**Type:** $if[$get[isPremium]==true;Premium (4h cooldown);Free (12h cooldown)]}{footer:Generated from $serverName}{timestamp}]
+**Type:** $if[$get[isPremium]==true;Premium (4h cooldown);Free (12h cooldown)]}{footer:Generated from $serverName[$serverID]}{timestamp}]
 
 $c[Delete link from Firebase]
 $httpRequest[https://dominum-dispenser.firebaseio.com/links/$getSlashCommandOptions[category]/$get[selectedKey].json?auth=$getGlobalUserVar[firebase_token];DELETE;;delete_response;{
