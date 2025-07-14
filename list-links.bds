@@ -1,0 +1,69 @@
+$nomention
+$onlyIf[$hasPerms[ManageMessages;$authorID]==true;{color:RED}{title:❌ No Permission}{description:You need `Manage Messages` permission to use this command!}]
+
+$c[Get all links from Firebase]
+$httpRequest[https://dominum-dispenser.firebaseio.com/links.json?auth=$getGlobalUserVar[firebase_token];GET;;links_response;{
+  "content-type": "application/json"
+}]
+
+$c[Check if database has any links]
+$onlyIf[$httpResult[links_response]!=null;{color:YELLOW}{title:📋 Database Empty}{description:No links found in the database. Use `/add-link` to add some links!}]
+
+$c[Parse database response]
+$let[allLinks;$httpResult[links_response]]
+$let[categories;$objectKeys[$get[allLinks]]]
+$let[totalCategories;$arrayLength[$get[categories]]]
+
+$c[Build embed description]
+$let[embedDesc;]
+$let[totalLinksCount;0]
+
+$c[Loop through categories and count links]
+$for[i;0;$sub[$get[totalCategories];1]]
+  $let[currentCategory;$arrayAt[$get[categories];$get[i]]]
+  $let[categoryLinks;$objectProperty[$get[allLinks];$get[currentCategory]]]
+  $let[categoryCount;$arrayLength[$objectKeys[$get[categoryLinks]]]]
+  $let[totalLinksCount;$sum[$get[totalLinksCount];$get[categoryCount]]]
+  
+  $let[embedDesc;$get[embedDesc]
+**$get[currentCategory]:** $get[categoryCount] links]
+$endFor
+
+$c[Add summary]
+$let[embedDesc;$get[embedDesc]
+
+📊 **Total Categories:** $get[totalCategories]
+🔗 **Total Links:** $get[totalLinksCount]]
+
+$c[Show optional category filter]
+$if[$getSlashCommandOptions[category]!=]
+  $c[Filter by specific category]
+  $let[filteredCategory;$getSlashCommandOptions[category]]
+  $let[categoryData;$objectProperty[$get[allLinks];$get[filteredCategory]]]
+  
+  $onlyIf[$get[categoryData]!=null;{color:RED}{title:❌ Category Not Found}{description:The category `$get[filteredCategory]` doesn't exist in the database!}]
+  
+  $let[categoryLinks;$objectKeys[$get[categoryData]]]
+  $let[categoryCount;$arrayLength[$get[categoryLinks]]]
+  
+  $let[linksList;]
+  $for[j;0;$min[9;$sub[$get[categoryCount];1]]]
+    $let[linkKey;$arrayAt[$get[categoryLinks];$get[j]]]
+    $let[linkValue;$objectProperty[$get[categoryData];$get[linkKey]]]
+    $let[linksList;$get[linksList]
+`$sum[$get[j];1].` $get[linkValue]]
+  $endFor
+  
+  $if[$get[categoryCount]>10]
+    $let[linksList;$get[linksList]
+... and $sub[$get[categoryCount];10] more links]
+  $endif
+  
+  {color:BLUE}{title:📋 Links in $get[filteredCategory]}{description:$get[linksList]
+
+**Total Links in Category:** $get[categoryCount]}{footer:Showing up to 10 links}
+$else
+  {color:BLUE}{title:📋 Link Database Overview}{description:$get[embedDesc]}{footer:Use category parameter to view specific links}
+$endif
+
+$createSlashCommand[list-links;List all links in the database;category:Filter by specific category:false:3]
